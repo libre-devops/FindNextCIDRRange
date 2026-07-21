@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate (dotnet build, fmt, validate, tflint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build the function
+        run: dotnet build src/Find-NextCidrRange -c Release
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.9"
+
+      - name: Terraform fmt
+        run: terraform -chdir=terraform fmt -check -recursive
+
+      - name: Validate the stack
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform init -backend=false -input=false >/dev/null
+          terraform -chdir=terraform validate
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93 # v6.2.2
+
+      - name: TFLint
+        run: |
+          set -euo pipefail
+          ( cd terraform && tflint --init && tflint --recursive )

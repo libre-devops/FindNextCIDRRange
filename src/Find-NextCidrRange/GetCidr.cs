@@ -21,28 +21,37 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+// .NET 8 isolated worker port of Gary L. Mullen-Schultz's original in-process function. The HTTP
+// contract is preserved exactly, warts deliberately included: the same route, methods, and query
+// parameters; the same indented-JSON string bodies with the same field names; text/plain content
+// type on responses; and every error returned with HTTP 400 on the wire while the intended status
+// lives in the body's code field, because existing consumers parse the body, not the status line.
+// One behaviour change only: the original kept the working status code in a static field shared
+// across invocations, which could bleed one request's error code into another's error body under
+// concurrency; it is a local here. Per-request behaviour is identical.
+
 using Azure;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Resources;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
-
 
 namespace FindNextCIDR
 {
-    public static class GetCidr
+    public class GetCidr
     {
+        private readonly ILogger<GetCidr> _logger;
+
+        public GetCidr(ILogger<GetCidr> logger)
+        {
+            _logger = logger;
+        }
+
         public class ProposedSubnetResponse
         {
             public string name { get; set; }
@@ -52,20 +61,18 @@ namespace FindNextCIDR
             public string addressSpace { get; set; }
             public string proposedCIDR { get; set; }
         }
+
         public class CustomError
         {
             public string code { get; set; }
             public string message { get; set; }
         }
 
-        static HttpStatusCode httpStatusCode = HttpStatusCode.OK;
-
-        [FunctionName("GetCidr")]
-        public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
-            ILogger log)
+        [Function("GetCidr")]
+        public async Task<HttpResponseData> Run(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post")] HttpRequestData req)
         {
-            log.LogInformation("C# HTTP trigger function processed a request.");
+            _logger.LogInformation("C# HTTP trigger function processed a request.");
 
             string subscriptionId = req.Query["subscriptionId"];
             string virtualNetworkName = req.Query["virtualNetworkName"];
@@ -79,6 +86,7 @@ namespace FindNextCIDR
             string foundAddressSpace = null;
             byte cidr;
             VirtualNetworkResource vNet = null;
+            HttpStatusCode httpStatusCode = HttpStatusCode.OK;
 
             try
             {
@@ -99,20 +107,18 @@ namespace FindNextCIDR
 
                         vNet = await rg.GetVirtualNetworkAsync(virtualNetworkName);
 
-                        var vNetCIDRs = new HashSet<IPNetwork2>();
-
                         foreach (string ip in vNet.Data.AddressPrefixes)
                         {
                             IPNetwork2 vNetCIDR = IPNetwork2.Parse(ip);
                             if (cidr >= vNetCIDR.Cidr && (null == desiredAddressSpace || vNetCIDR.ToString().Equals(desiredAddressSpace)))
                             {
-                                log.LogInformation("In: Candidate = " + vNetCIDR.ToString() + ", desired = " + desiredAddressSpace);
+                                _logger.LogInformation("In: Candidate = " + vNetCIDR.ToString() + ", desired = " + desiredAddressSpace);
                                 foundSubnet = GetValidSubnetIfExists(vNet, vNetCIDR, cidr);
                                 foundAddressSpace = vNetCIDR.ToString();
 
                                 if (null != foundSubnet)
                                 {
-                                    log.LogInformation("Valid subnet is found: " + foundSubnet);
+                                    _logger.LogInformation("Valid subnet is found: " + foundSubnet);
                                     success = true;
                                     break;
                                 }
@@ -127,8 +133,6 @@ namespace FindNextCIDR
                             else
                                 errorMessage = "Requested address space (" + desiredAddressSpace + ") not found in VNet " + resourceGroupName + "/" + virtualNetworkName;
                         }
-
-
                     }
                     else
                     {
@@ -136,14 +140,12 @@ namespace FindNextCIDR
                         errorMessage = "Invalid CIDR size requested: " + cidrString;
                     }
                 }
-
                 else
                 {
                     httpStatusCode = HttpStatusCode.BadRequest;
                     errorMessage = "Invalid input: " + errorMessage;
                 }
             }
-
             catch (RequestFailedException ex) when (ex.Status == 404) // case the resource group or vnet doesn't exist
             {
                 httpStatusCode = HttpStatusCode.NotFound;
@@ -151,13 +153,11 @@ namespace FindNextCIDR
             }
             catch (Exception e)
             {
-
                 httpStatusCode = HttpStatusCode.InternalServerError;
                 error = e;
                 // empty code var will signal error
             }
 
-            ObjectResult result;
             if (null == errorMessage && success)
             {
                 ProposedSubnetResponse proposedSubnetResponse = new ProposedSubnetResponse()
@@ -165,34 +165,45 @@ namespace FindNextCIDR
                     name = virtualNetworkName,
                     id = vNet.Id,
                     type = vNet.Id.ResourceType,
-                    location = vNet.Data.Location,
+                    location = vNet.Data.Location.ToString(),
                     proposedCIDR = foundSubnet,
                     addressSpace = foundAddressSpace
-
                 };
 
                 var options = new JsonSerializerOptions { WriteIndented = true };
                 string jsonString = JsonSerializer.Serialize(proposedSubnetResponse, options);
 
-                result = new OkObjectResult(jsonString);
+                return await PlainTextResponse(req, HttpStatusCode.OK, jsonString);
             }
             else
-            {   if(null != error) 
-                { 
+            {
+                if (null != error)
+                {
                     errorMessage = error.Message;
                 }
-                var customError = new CustomError {
+                var customError = new CustomError
+                {
                     code = "" + ((int)httpStatusCode),
-                    message = httpStatusCode.ToString() + ", " +  errorMessage
+                    message = httpStatusCode.ToString() + ", " + errorMessage
                 };
 
                 var options = new JsonSerializerOptions { WriteIndented = true };
                 string jsonString = JsonSerializer.Serialize(customError, options);
 
-                result = new BadRequestObjectResult(jsonString);
+                // The original returned BadRequestObjectResult for every error, so the wire status
+                // is always 400 and the intended status lives in the body. Preserved on purpose.
+                return await PlainTextResponse(req, HttpStatusCode.BadRequest, jsonString);
             }
+        }
 
-            return result;
+        private static async Task<HttpResponseData> PlainTextResponse(HttpRequestData req, HttpStatusCode status, string body)
+        {
+            var response = req.CreateResponse(status);
+            // ObjectResult over a string serialized as text/plain in the in-process model; kept for
+            // byte-compatibility with existing consumers.
+            response.Headers.Add("Content-Type", "text/plain; charset=utf-8");
+            await response.WriteStringAsync(body);
+            return response;
         }
 
         private static string ValidateInput(string subscriptionId, string virtualNetworkName, string resourceGroupName, string cidrString, string desiredAddressSpace)
@@ -235,10 +246,10 @@ namespace FindNextCIDR
             {
                 try
                 {
-                   // IPAddress.Parse(inCIDRBlock);
                     IPNetwork2.Parse(inCIDRBlock);
                     isGood = true;
-                } catch 
+                }
+                catch
                 {
                     isGood = false;
                 }
@@ -253,8 +264,8 @@ namespace FindNextCIDR
 
             byte cidr;
 
-            if(Byte.TryParse(inCIDR, out cidr))
-            { 
+            if (Byte.TryParse(inCIDR, out cidr))
+            {
                 isGood = (2 <= cidr && 29 >= cidr);
             }
 
@@ -275,13 +286,13 @@ namespace FindNextCIDR
             foreach (SubnetResource usedSubnet in usedSubnetsAzure)
             {
                 var prefixes = new List<string>();
-                
+
                 prefixes.AddRange(usedSubnet.Data.AddressPrefixes);
 
-                if ( null != usedSubnet.Data.AddressPrefix && !prefixes.Contains(usedSubnet.Data.AddressPrefix))
+                if (null != usedSubnet.Data.AddressPrefix && !prefixes.Contains(usedSubnet.Data.AddressPrefix))
                     prefixes.Add(usedSubnet.Data.AddressPrefix);
 
-                foreach(var prefix in prefixes)
+                foreach (var prefix in prefixes)
                     usedSubnets.Add(IPNetwork2.Parse(prefix));
             }
 
@@ -305,6 +316,5 @@ namespace FindNextCIDR
             // no valid subnet found
             return null;
         }
-
     }
 }
