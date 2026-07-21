@@ -18,11 +18,14 @@ locals {
 
   # Both identities need the grant: the app carries a user-assigned identity for host storage, but
   # DefaultAzureCredential with no AZURE_CLIENT_ID authenticates as the system-assigned one, so
-  # granting only one of them leaves the function 403ing depending on the credential chain.
-  function_principal_ids = distinct(compact([
+  # granting only one of them leaves the function 403ing depending on the credential chain. The
+  # list stays statically sized (no compact/distinct): its length feeds for_each keys downstream,
+  # and on a fresh apply the ids are unknown, so a dynamic length fails the plan. The flex module
+  # attaches both identity kinds by default, so both entries are always real.
+  function_principal_ids = [
     module.flex_function_app.identity_principal_ids[local.func_name].system_assigned,
     module.flex_function_app.identity_principal_ids[local.func_name].user_assigned,
-  ]))
+  ]
 }
 
 module "tags" {
