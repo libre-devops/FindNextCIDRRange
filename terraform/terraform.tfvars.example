@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars (gitignored) and make it yours. Every value has a sensible default, so
+# only set what differs for you.
+
+owner       = "craig@craigthacker.dev"
+cost_centre = "1888/67"
+
+short = "ldo"
+loc   = "uks"
+env   = "dev"
+
+# The pre-seeded vnet exists so a fresh deployment can prove itself; turn it off in production.
+deploy_test_vnet = true

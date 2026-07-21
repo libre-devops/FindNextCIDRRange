@@ -17,8 +17,8 @@ module "tags" {
   source  = "libre-devops/tags/azurerm"
   version = "~> 4.0"
 
-  cost_centre     = "1888/67"
-  owner           = "platform@example.com"
+  cost_centre     = var.cost_centre
+  owner           = var.owner
   additional_tags = { Application = "FindNextCIDRRange" }
 }
 
