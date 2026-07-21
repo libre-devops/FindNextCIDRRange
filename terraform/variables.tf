@@ -22,6 +22,12 @@ variable "loc" {
   default     = "uks"
 }
 
+variable "reader_scopes" {
+  description = "Bring-your-own-network path: Azure resource IDs (subscription, resource group, or vnet) where the function's identity is granted Reader, so it can answer queries about networks that already exist. Leave empty on the standalone path."
+  type        = list(string)
+  default     = []
+}
+
 variable "owner" {
   description = "Owner tag applied to everything: the person or team accountable for the deployment. Replace the placeholder with yours."
   type        = string

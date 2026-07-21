@@ -58,17 +58,25 @@ rewrite preserves deliberately (existing consumers parse the body).
 
 Version 2.0.0 is the v-next treatment with the contract held byte-stable:
 
-- **.NET 8 isolated worker**, replacing .NET 6 in-process (EOL, with the in-process model itself
-  retiring November 2026). Same route, parameters, bodies, and content type.
-- One concurrency bug fixed: the working status code was a static shared across invocations and
-  could bleed one request's error code into another's error body; it is per-request now.
+- **.NET 10 isolated worker**, replacing .NET 6 in-process. The original's runtime is EOL and the
+  in-process model itself retires in November 2026; .NET 10 is the current LTS, supported on Flex
+  Consumption to November 2028. Same route, parameters, bodies, and content type.
+- Two inherited bugs fixed without touching the contract: the working status code was a static
+  shared across invocations and could bleed one request's error code into another's error body
+  (per-request now), and the subscription lookup demanded `subscriptions/read` at subscription
+  scope, which made narrowly scoped Reader grants fail with a 403 dressed as a 500 (the resource
+  group ID is now constructed directly, so Reader on the vnet's scope is genuinely enough).
 - **Terraform on the Libre DevOps registry modules**: a Flex Consumption function app (FC1 plan,
-  keyless storage, user-assigned identity, identity-based host storage, all module defaults), a
-  Reader grant for the identity (that is all the function needs), and an optional pre-seeded test
-  vnet so a fresh deployment can prove itself immediately.
+  keyless storage, user-assigned identity, identity-based host storage, all module defaults) and
+  Reader grants for the app's identities (that is all the function needs).
 - The usual estate furniture: justfile, CI, and this README.
 
 ## Deploy
+
+Two paths, chosen entirely by tfvars.
+
+**Standalone** (the default) seeds a small test vnet with two subnets already carved, so the API
+has a real question to answer the moment the deploy lands:
 
 ```bash
 az login
@@ -80,14 +88,21 @@ just deploy      # push the zip to the app
 just try         # query the test vnet; expect 10.30.0.128/26
 ```
 
-The identity needs Reader over whatever scopes hold the vnets you query; the stack grants it on
-its own resource group for the test vnet, and real use repeats that grant where your networks
-live. Set `-var deploy_test_vnet=false` to skip the test vnet in a production deployment. State is
-local and gitignored; this is a deploy-into-your-tenant tool, not a shared pipeline.
+**Bring your own network** deploys nothing but the function and points Reader at the networks you
+already have: start from `terraform/terraform.tfvars.byon.example` instead, which sets
+`deploy_test_vnet = false` and lists your `reader_scopes` (subscription, resource group, or single
+vnet IDs; narrower is better). Same `just` steps afterwards.
+
+State is local and gitignored; this is a deploy-into-your-tenant tool, not a shared pipeline.
 
 ## Notes
 
 - The function authenticates outward with `DefaultAzureCredential`, so the app's managed identity
-  is the credential in Azure, and your az login is the credential when running locally.
+  is the credential in Azure, and your az login is the credential when running locally. The stack
+  grants Reader to both of the app's identities (system-assigned and user-assigned), because the
+  credential chain picks the system-assigned one unless told otherwise.
+- Flex Consumption zip deploys flake: `just deploy` pushes with a spaced retry, and the az CLI's
+  exit code is not trusted either way (its health check can error even when the deploy landed), so
+  the only verdict that counts is `just try` returning an answer.
 - The API is anonymous at the function layer by design (the original behaviour); put it behind
   your own network controls or function keys as your environment requires.

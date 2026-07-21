@@ -14,9 +14,20 @@ package:
     cd publish && zip -qr ../function.zip .
     @echo "function.zip ready"
 
-# Deploy the packaged function to the app the stack created
+# Deploy the packaged function to the app the stack created. Pushed with a spaced retry because
+# flex zip deploys flake transiently, and the CLI's exit code is untrustworthy either way (its
+# keyless host-key health check can error even on landed deploys), so success is only ever judged
+# by `just try`, never by this recipe's exit code.
 deploy:
-    az functionapp deployment source config-zip -g "$(terraform -chdir=terraform output -raw resource_group_name)" -n "$(terraform -chdir=terraform output -raw function_app_name)" --src function.zip
+    #!/usr/bin/env bash
+    set -uo pipefail
+    rg="$(terraform -chdir=terraform output -raw resource_group_name)"
+    app="$(terraform -chdir=terraform output -raw function_app_name)"
+    for attempt in 1 2 3; do
+        az functionapp deployment source config-zip -g "$rg" -n "$app" --src function.zip && break
+        [ "$attempt" = "3" ] || { echo "retrying in 20s"; sleep 20; }
+    done
+    echo "pushed; judge success with: just try"
 
 # Terraform lifecycle against the stack
 plan *args:

@@ -1,0 +1,18 @@
+# Bring-your-own-network path: copy to terraform.tfvars (gitignored) and make it yours. Only the
+# function app deploys (no test vnet), and its identity is granted Reader on exactly the scopes
+# you list, which is all the API needs to answer queries about your existing networks. A scope can
+# be a whole subscription, a resource group, or a single vnet; narrower is better.
+
+owner       = "craig@craigthacker.dev"
+cost_centre = "1888/67"
+
+short = "ldo"
+loc   = "uks"
+env   = "prd"
+
+deploy_test_vnet = false
+
+reader_scopes = [
+  "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-my-network",
+  "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-other/providers/Microsoft.Network/virtualNetworks/vnet-hub",
+]

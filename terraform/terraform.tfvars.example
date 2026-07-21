@@ -1,5 +1,8 @@
-# Copy to terraform.tfvars (gitignored) and make it yours. Every value has a sensible default, so
-# only set what differs for you.
+# Standalone path: copy to terraform.tfvars (gitignored) and make it yours. Every value has a
+# sensible default, so only set what differs for you. This path seeds a small test vnet so the API
+# has something real to answer the moment the deploy lands; `just try` should propose
+# 10.30.0.128/26. For a deployment against networks you already have, start from
+# terraform.tfvars.byon.example instead.
 
 owner       = "craig@craigthacker.dev"
 cost_centre = "1888/67"
@@ -8,5 +11,4 @@ short = "ldo"
 loc   = "uks"
 env   = "dev"
 
-# The pre-seeded vnet exists so a fresh deployment can prove itself; turn it off in production.
 deploy_test_vnet = true

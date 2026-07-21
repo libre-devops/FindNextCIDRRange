@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-// .NET 8 isolated worker port of Gary L. Mullen-Schultz's original in-process function. The HTTP
+// .NET 10 isolated worker port of Gary L. Mullen-Schultz's original in-process function. The HTTP
 // contract is preserved exactly, warts deliberately included: the same route, methods, and query
 // parameters; the same indented-JSON string bodies with the same field names; text/plain content
 // type on responses; and every error returned with HTTP 400 on the wire while the intended status
@@ -99,11 +99,16 @@ namespace FindNextCIDR
                     {
                         cidr = Byte.Parse(cidrString);
 
-                        // Get a client for the SDK calls
+                        // Get a client for the SDK calls. The resource group id is constructed
+                        // directly rather than via GetDefaultSubscriptionAsync: the original's
+                        // subscription lookup demanded subscriptions/read at subscription scope,
+                        // which made narrowly scoped Reader grants (a resource group or a single
+                        // vnet) fail with a 403 dressed as a 500. Reading only what is queried
+                        // means Reader on the vnet's scope is genuinely enough.
                         var armClient = new ArmClient(new DefaultAzureCredential(), subscriptionId);
 
-                        var subscription = await armClient.GetDefaultSubscriptionAsync();
-                        ResourceGroupResource rg = await subscription.GetResourceGroupAsync(resourceGroupName);
+                        ResourceGroupResource rg = armClient.GetResourceGroupResource(
+                            ResourceGroupResource.CreateResourceIdentifier(subscriptionId, resourceGroupName));
 
                         vNet = await rg.GetVirtualNetworkAsync(virtualNetworkName);
 
