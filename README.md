@@ -73,6 +73,7 @@ Version 2.0.0 is the v-next treatment with the contract held byte-stable:
 ```bash
 az login
 export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars   # then make it yours (owner tag etc.)
 just apply       # the stack: function app, identity, Reader grant, test vnet
 just package     # dotnet publish + zip
 just deploy      # push the zip to the app
