@@ -54,10 +54,13 @@ omitted, the first space that fits wins. `cidr` accepts 2 through 29. Errors ret
 with HTTP 400 on the wire while the meaningful status lives in the body's `code` field, which this
 rewrite preserves deliberately (existing consumers parse the body).
 
-The API documents itself: a deployed app serves its OpenAPI description at `/api/openapi.yaml`
-and an interactive Swagger UI at `/api/swagger`. The spec is [`openapi.yaml`](./openapi.yaml) in
-the repo root, embedded into the assembly at build time so the two can never drift, and it
-records the contract warts and all.
+The API documents itself: a deployed app serves a landing page at `/` (a single self-contained
+HTML document, no external assets), its OpenAPI description at `/api/openapi.yaml`, and an
+interactive Swagger UI at `/api/swagger`. The spec is [`openapi.yaml`](./openapi.yaml) in the
+repo root, embedded into the assembly at build time so the two can never drift, and it records
+the contract warts and all. Under the hood host.json empties the global route prefix so the root
+is routable, and every function pins its full historical `api/...` path, so the wire contract is
+unchanged.
 
 ## The 2.x rewrite
 

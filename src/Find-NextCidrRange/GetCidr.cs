@@ -68,9 +68,11 @@ namespace FindNextCIDR
             public string message { get; set; }
         }
 
+        // The route is pinned to the full historical path because host.json empties the global
+        // route prefix (so the landing page can own "/"); the wire URL is unchanged.
         [Function("GetCidr")]
         public async Task<HttpResponseData> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post")] HttpRequestData req)
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = "api/GetCidr")] HttpRequestData req)
         {
             _logger.LogInformation("C# HTTP trigger function processed a request.");
 
