@@ -1,0 +1,184 @@
+openapi: 3.0.3
+info:
+  title: FindNextCIDRRange
+  version: 2.1.0
+  description: |
+    An HTTP API that answers one question well: what is the next free CIDR of a given size in an
+    Azure virtual network?
+
+    Two behaviours are preserved deliberately from the original 1.x contract, because existing
+    consumers depend on them:
+    * Responses are JSON in the body but carry `Content-Type: text/plain; charset=utf-8`.
+    * Every error travels with HTTP 400 on the wire; the meaningful status lives in the error
+      body's `code` field (`400` invalid input, `404` vnet or address space not found, `500`
+      unexpected failure).
+
+    The caller's identity is the function app's managed identity, which needs Reader on the scope
+    holding the virtual network being queried.
+  license:
+    name: MIT
+    url: https://github.com/libre-devops/FindNextCIDRRange/blob/main/LICENSE
+  contact:
+    name: Libre DevOps
+    url: https://libredevops.org
+servers:
+  - url: /api
+    description: Relative to the function app host (the default route prefix)
+paths:
+  /GetCidr:
+    get:
+      operationId: getCidr
+      summary: Propose the next free CIDR of the requested size
+      description: >-
+        Walks the vnet's address spaces in order and returns the first candidate subnet of the
+        requested size that does not overlap any existing subnet.
+      parameters:
+        - $ref: '#/components/parameters/subscriptionId'
+        - $ref: '#/components/parameters/resourceGroupName'
+        - $ref: '#/components/parameters/virtualNetworkName'
+        - $ref: '#/components/parameters/cidr'
+        - $ref: '#/components/parameters/addressSpace'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '400':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: getCidrPost
+      summary: Identical to GET; parameters are still read from the query string
+      description: >-
+        Accepted for compatibility with the original function. Any request body is ignored; all
+        parameters come from the query string, exactly as with GET.
+      parameters:
+        - $ref: '#/components/parameters/subscriptionId'
+        - $ref: '#/components/parameters/resourceGroupName'
+        - $ref: '#/components/parameters/virtualNetworkName'
+        - $ref: '#/components/parameters/cidr'
+        - $ref: '#/components/parameters/addressSpace'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '400':
+          $ref: '#/components/responses/Error'
+components:
+  parameters:
+    subscriptionId:
+      name: subscriptionId
+      in: query
+      required: true
+      description: The Azure subscription holding the virtual network.
+      schema:
+        type: string
+        format: uuid
+        example: 00000000-0000-0000-0000-000000000000
+    resourceGroupName:
+      name: resourceGroupName
+      in: query
+      required: true
+      description: The resource group holding the virtual network.
+      schema:
+        type: string
+        example: rg-example
+    virtualNetworkName:
+      name: virtualNetworkName
+      in: query
+      required: true
+      description: The virtual network to search.
+      schema:
+        type: string
+        example: vnet-example-001
+    cidr:
+      name: cidr
+      in: query
+      required: true
+      description: The requested subnet size as a CIDR prefix length.
+      schema:
+        type: integer
+        minimum: 2
+        maximum: 29
+        example: 26
+    addressSpace:
+      name: addressSpace
+      in: query
+      required: false
+      description: >-
+        Narrows the search to one of the vnet's address spaces. The value must match the space
+        exactly in normalised form (for example 10.30.0.0/24). Omitted, the first address space
+        that can fit the request wins.
+      schema:
+        type: string
+        example: 10.30.0.0/24
+  schemas:
+    ProposedSubnetResponse:
+      type: object
+      description: A proposal; nothing is created or reserved by this API.
+      properties:
+        name:
+          type: string
+          description: The virtual network's name.
+        id:
+          type: string
+          description: The virtual network's ARM resource ID.
+        type:
+          type: string
+          description: Always Microsoft.Network/virtualNetworks.
+        location:
+          type: string
+          description: The virtual network's Azure region.
+        addressSpace:
+          type: string
+          description: The address space the proposal was carved from.
+        proposedCIDR:
+          type: string
+          description: The first free subnet of the requested size.
+    CustomError:
+      type: object
+      properties:
+        code:
+          type: string
+          description: The meaningful HTTP status as a string; the wire status is always 400.
+          enum: ['400', '404', '500']
+        message:
+          type: string
+          description: The status name, a comma, then the detail.
+  responses:
+    Success:
+      description: >-
+        A subnet of the requested size fits. The body is JSON, served as text/plain (a preserved
+        1.x behaviour).
+      content:
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ProposedSubnetResponse'
+          example:
+            name: vnet-example-001
+            id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-example/providers/Microsoft.Network/virtualNetworks/vnet-example-001
+            type: Microsoft.Network/virtualNetworks
+            location: uksouth
+            addressSpace: 10.30.0.0/24
+            proposedCIDR: 10.30.0.128/26
+    Error:
+      description: >-
+        Any failure. The wire status is always 400 (a preserved 1.x behaviour); read the body's
+        code field for the meaningful status: 400 invalid input, 404 vnet or address space not
+        found (or nothing of the requested size fits), 500 unexpected failure.
+      content:
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/CustomError'
+          examples:
+            invalidInput:
+              summary: Invalid input (body code 400)
+              value:
+                code: '400'
+                message: 'BadRequest, Invalid CIDR size requested: 55'
+            notFound:
+              summary: Vnet, address space, or free block not found (body code 404)
+              value:
+                code: '404'
+                message: NotFound, VNet rg-example/vnet-example-001 cannot accept a subnet of size 26
+            unexpected:
+              summary: Unexpected failure (body code 500)
+              value:
+                code: '500'
+                message: InternalServerError, <the underlying exception message>

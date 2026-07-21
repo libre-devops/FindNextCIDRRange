@@ -54,6 +54,11 @@ omitted, the first space that fits wins. `cidr` accepts 2 through 29. Errors ret
 with HTTP 400 on the wire while the meaningful status lives in the body's `code` field, which this
 rewrite preserves deliberately (existing consumers parse the body).
 
+The API documents itself: a deployed app serves its OpenAPI description at `/api/openapi.yaml`
+and an interactive Swagger UI at `/api/swagger`. The spec is [`openapi.yaml`](./openapi.yaml) in
+the repo root, embedded into the assembly at build time so the two can never drift, and it
+records the contract warts and all.
+
 ## The 2.x rewrite
 
 Version 2.0.0 is the v-next treatment with the contract held byte-stable:
