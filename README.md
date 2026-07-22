@@ -77,7 +77,9 @@ Version 2.0.0 is the v-next treatment with the contract held byte-stable:
 - **Terraform on the Libre DevOps registry modules**: a Flex Consumption function app (FC1 plan,
   keyless storage, user-assigned identity, identity-based host storage, all module defaults) and
   Reader grants for the app's identities (that is all the function needs).
-- The usual estate furniture: justfile, CI, and this README.
+- The usual estate furniture: a PowerShell justfile, CI that runs the unit tests pinning the wire
+  contract (the always-400 wart, the text/plain bodies, the exact error shapes), CodeQL scanning,
+  dependabot, and this README.
 
 ## Deploy
 
