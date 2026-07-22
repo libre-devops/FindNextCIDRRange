@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   validate:
-    name: Validate (dotnet build + test, fmt, validate, tflint)
+    name: Validate (dotnet build + test, fmt, validate, tflint, trivy)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,3 +45,27 @@ jobs:
         run: |
           set -euo pipefail
           ( cd terraform && tflint --init && tflint --recursive )
+
+      # The trivyignores input is avoided on purpose: trivy-action concatenates the listed files
+      # into an extension-less temp file, and trivy decides the ignore-file format by extension,
+      # so a YAML waiver file silently stops matching. The TRIVY_IGNOREFILE env var hands trivy
+      # the file directly, extension intact.
+      - name: Trivy config scan (report CRITICAL to LOW, non-blocking)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_IGNOREFILE: .trivyignore.yaml
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: CRITICAL,HIGH,MEDIUM,LOW
+          exit-code: "0"
+
+      - name: Trivy config gate (fail on HIGH or CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_IGNOREFILE: .trivyignore.yaml
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          exit-code: "1"

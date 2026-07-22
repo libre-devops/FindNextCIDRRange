@@ -1,0 +1,27 @@
+# Trivy scan waivers for this repo.
+#
+# This is the machine-applied source of truth for security-scan exceptions: `just scan` and the CI
+# trivy steps pass this file via TRIVY_IGNOREFILE, so a waived finding stops failing the build.
+# Every entry MUST also have a row in the "Security scan exceptions" table in README.md, with the
+# same id and a justification, so the waiver is auditable.
+#
+# Rules:
+#   - Only waive a finding you have a real, defensible reason to waive. HIGH/CRITICAL is otherwise
+#     merge-blocking; a waiver is a deliberate, reviewed decision, never a way to quiet a finding
+#     you should fix.
+#   - Prefer scoping with paths so the waiver only applies where intended. A finding raised inside
+#     a composed module is reported under the module source address with a .terraform/modules path,
+#     and the leading segments differ by scan mode (repo root vs stack folder), so anchor globs on
+#     the .terraform/modules suffix.
+
+misconfigurations:
+  - id: AVD-AZU-0012
+    paths:
+      - "**/.terraform/modules/flex_function_app/main.tf"
+    statement: >-
+      The flagged storage account is the Flex Consumption function's host storage, created inside
+      the composed flex-consumption-function-app module. It must stay reachable: this is a
+      deploy-into-your-tenant tool, so zip deploys arrive from wherever the operator runs
+      just deploy (no knowable IP to allow-list), and the Functions platform itself needs the
+      account. Data-plane access is Entra ID via the app's managed identity, the account holds
+      only the function package and host state, and the stack is disposable by design.

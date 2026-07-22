@@ -116,3 +116,12 @@ State is local and gitignored; this is a deploy-into-your-tenant tool, not a sha
   the only verdict that counts is `just try` returning an answer.
 - The API is anonymous at the function layer by design (the original behaviour); put it behind
   your own network controls or function keys as your environment requires.
+
+## Security scan exceptions
+
+CI runs a trivy config scan that gates on HIGH and CRITICAL findings. Waivers live in
+[`.trivyignore.yaml`](./.trivyignore.yaml), and every waiver is recorded here.
+
+| ID | Where | Justification |
+| --- | --- | --- |
+| AVD-AZU-0012 | The function's host storage account, inside the composed flex-consumption-function-app module | The host storage must stay reachable: zip deploys arrive from wherever the operator runs `just deploy` (no knowable IP to allow-list) and the Functions platform itself needs the account. Data-plane access is Entra ID via the app's managed identity, the account holds only the function package and host state, and the stack is disposable by design. |

@@ -65,13 +65,20 @@ apply *args:
 destroy *args:
     terraform -chdir=terraform destroy -auto-approve {{ args }}
 
-# Everything CI runs: build, unit tests, then terraform fmt and validate
+# Trivy config scan over the repo, gating on HIGH and CRITICAL like CI. Waivers live in
+# .trivyignore.yaml, and every waiver has a row in the README's security scan exceptions table.
+# Run after init so the composed modules under .terraform/modules are scanned too.
+scan:
+    trivy config --ignorefile .trivyignore.yaml --severity CRITICAL,HIGH --exit-code 1 .
+
+# Everything CI runs: build, unit tests, then terraform fmt, validate, and the trivy gate
 check:
     dotnet build FindNextCIDRRange.sln -c Release
     dotnet test FindNextCIDRRange.sln -c Release --no-build
     terraform -chdir=terraform fmt -check -recursive
     terraform -chdir=terraform init -backend=false -input=false > $null
     terraform -chdir=terraform validate
+    trivy config --ignorefile .trivyignore.yaml --severity CRITICAL,HIGH --exit-code 1 .
 
 # Call the deployed API against the test vnet (expects the next free /26)
 try:
