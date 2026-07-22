@@ -58,6 +58,43 @@ travel with the body's `code` as the wire status instead. The bodies are identic
 so opt in freely on a fresh deployment; leave it off where existing consumers might branch on the
 constant 400.
 
+A second endpoint checks any CIDR against Azure's subnet rules using nothing but arithmetic, so
+it needs no identity, no Reader grant, and no Azure call at all:
+
+```
+GET https://<functionapp>/api/CheckCidr?cidr=10.0.0.0/29
+```
+
+```json
+{
+  "cidr": "10.0.0.0/29",
+  "normalized": "10.0.0.0/29",
+  "validAzureSubnet": true,
+  "prefixLength": 29,
+  "totalAddresses": 8,
+  "azureReservedAddresses": 5,
+  "usableAddresses": 3,
+  "reserved": {
+    "networkAddress": "10.0.0.0",
+    "defaultGateway": "10.0.0.1",
+    "azureDns": ["10.0.0.2", "10.0.0.3"],
+    "broadcast": "10.0.0.7"
+  },
+  "firstUsable": "10.0.0.4",
+  "lastUsable": "10.0.0.6",
+  "reason": null
+}
+```
+
+Azure reserves five addresses in every subnet (the network address, the default gateway, two for
+Azure DNS, and the broadcast address), which is why subnets run from /2 to /29, why a /30 cannot
+exist (its 4 addresses cannot fit the reserved 5), and why `GetCidr` has always accepted `cidr` 2
+through 29. A /30 therefore answers `validAzureSubnet: false` with the reason spelled out, and
+that is a 200: the question was answered. `CheckCidr` postdates the 1.x contract, so it carries
+none of the preserved quirks: responses are `application/json` and wire statuses are always
+truthful, with 400 reserved for input that cannot be parsed (garbage, a missing prefix length, or
+IPv6, where Azure subnets are always /64).
+
 The API documents itself: a deployed app serves a landing page at `/` (a single self-contained
 HTML document, no external assets), its OpenAPI description at `/api/openapi.yaml`, and an
 interactive Swagger UI at `/api/swagger`. The spec is [`openapi.yaml`](./openapi.yaml) in the

@@ -1,10 +1,11 @@
 openapi: 3.0.3
 info:
   title: FindNextCIDRRange
-  version: 2.2.0
+  version: 2.3.0
   description: |
     An HTTP API that answers one question well: what is the next free CIDR of a given size in an
-    Azure virtual network?
+    Azure virtual network? A second endpoint, `/CheckCidr`, checks any CIDR against Azure's
+    subnet rules using nothing but arithmetic, so it needs no Azure access at all.
 
     Two behaviours are preserved deliberately from the original 1.x contract, because existing
     consumers depend on them:
@@ -65,6 +66,39 @@ paths:
           $ref: '#/components/responses/Success'
         '400':
           $ref: '#/components/responses/Error'
+  /CheckCidr:
+    get:
+      operationId: checkCidr
+      summary: Check a CIDR against Azure's subnet rules, no Azure access needed
+      description: >-
+        Pure arithmetic plus Azure's subnet rules; nothing is looked up in Azure, so this endpoint
+        involves no identity and no Reader grant. Azure reserves five addresses in every subnet
+        (the network address, the default gateway, two addresses for Azure DNS, and the broadcast
+        address), which is why subnets run from /2 to /29 and a /30 cannot exist. This endpoint
+        postdates the 1.x contract and carries none of the preserved quirks: responses are
+        application/json and the wire status is always truthful, 200 for any parseable CIDR
+        (a verdict of "not allowed in Azure" is still a successful answer) and 400 only for input
+        that cannot be parsed.
+      parameters:
+        - $ref: '#/components/parameters/checkCidrInput'
+      responses:
+        '200':
+          $ref: '#/components/responses/CheckCidrResult'
+        '400':
+          $ref: '#/components/responses/CheckCidrBadInput'
+    post:
+      operationId: checkCidrPost
+      summary: Identical to GET; parameters are still read from the query string
+      description: >-
+        Accepted for symmetry with GetCidr. Any request body is ignored; the cidr parameter comes
+        from the query string, exactly as with GET.
+      parameters:
+        - $ref: '#/components/parameters/checkCidrInput'
+      responses:
+        '200':
+          $ref: '#/components/responses/CheckCidrResult'
+        '400':
+          $ref: '#/components/responses/CheckCidrBadInput'
 components:
   parameters:
     subscriptionId:
@@ -113,6 +147,16 @@ components:
       schema:
         type: string
         example: 10.30.0.0/24
+    checkCidrInput:
+      name: cidr
+      in: query
+      required: true
+      description: >-
+        The CIDR to check, with an explicit prefix length (a bare address would need a guessed
+        classful mask, so it is rejected). IPv4 only; Azure IPv6 subnets are always /64.
+      schema:
+        type: string
+        example: 10.0.0.0/29
   schemas:
     ProposedSubnetResponse:
       type: object
@@ -148,6 +192,60 @@ components:
         message:
           type: string
           description: The status name, a comma, then the detail.
+    CheckCidrResponse:
+      type: object
+      properties:
+        cidr:
+          type: string
+          description: The input, echoed.
+        normalized:
+          type: string
+          description: The network form of the input; host bits, if any, are dropped.
+        validAzureSubnet:
+          type: boolean
+          description: Whether Azure would accept a subnet of this size (/2 through /29).
+        prefixLength:
+          type: integer
+        totalAddresses:
+          type: integer
+          description: The arithmetic size of the range.
+        azureReservedAddresses:
+          type: integer
+          description: Always 5; the addresses Azure takes from every subnet.
+        usableAddresses:
+          type: integer
+          description: totalAddresses minus the reserved 5, or 0 when the subnet is not valid.
+        reserved:
+          type: object
+          nullable: true
+          description: The five reserved addresses; null when the subnet is not valid in Azure.
+          properties:
+            networkAddress:
+              type: string
+            defaultGateway:
+              type: string
+            azureDns:
+              type: array
+              items:
+                type: string
+            broadcast:
+              type: string
+        firstUsable:
+          type: string
+          nullable: true
+          description: The first address Azure would actually hand out.
+        lastUsable:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+          description: Why the subnet is not valid in Azure; null when it is.
+    CheckCidrError:
+      type: object
+      properties:
+        error:
+          type: string
   responses:
     Success:
       description: >-
@@ -190,3 +288,55 @@ components:
               value:
                 code: '500'
                 message: InternalServerError, <the underlying exception message>
+    CheckCidrResult:
+      description: >-
+        The verdict for a parseable CIDR, valid in Azure or not. Served as application/json with
+        a truthful wire status; this endpoint has no 1.x quirks to preserve.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CheckCidrResponse'
+          examples:
+            valid:
+              summary: The smallest subnet Azure allows
+              value:
+                cidr: 10.0.0.0/29
+                normalized: 10.0.0.0/29
+                validAzureSubnet: true
+                prefixLength: 29
+                totalAddresses: 8
+                azureReservedAddresses: 5
+                usableAddresses: 3
+                reserved:
+                  networkAddress: 10.0.0.0
+                  defaultGateway: 10.0.0.1
+                  azureDns: ['10.0.0.2', '10.0.0.3']
+                  broadcast: 10.0.0.7
+                firstUsable: 10.0.0.4
+                lastUsable: 10.0.0.6
+                reason: null
+            tooSmall:
+              summary: A /30 cannot exist in Azure
+              value:
+                cidr: 10.0.0.0/30
+                normalized: 10.0.0.0/30
+                validAzureSubnet: false
+                prefixLength: 30
+                totalAddresses: 4
+                azureReservedAddresses: 5
+                usableAddresses: 0
+                reserved: null
+                firstUsable: null
+                lastUsable: null
+                reason: >-
+                  An Azure subnet cannot be smaller than /29: Azure reserves 5 addresses in every
+                  subnet (the network address, the default gateway, two addresses for Azure DNS,
+                  and the broadcast address), so a /30 with 4 addresses cannot fit them.
+    CheckCidrBadInput:
+      description: The input could not be parsed as an IPv4 CIDR; the body says why.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CheckCidrError'
+          example:
+            error: 'cidr must include a prefix length, for example 10.0.0.0/24'

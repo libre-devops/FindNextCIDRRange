@@ -85,8 +85,9 @@ try:
     curl -s "$(terraform -chdir=terraform output -raw example_query)"
 
 # Exercise every live endpoint of the deployed app: the landing page, Swagger UI, the OpenAPI
-# spec, the happy path against the test vnet (skipped on the bring-your-own-network path), and
-# the preserved error contract (HTTP 400 on the wire, the meaningful code in the body)
+# spec, the zero-access CIDR checker (both verdicts), the happy path against the test vnet
+# (skipped on the bring-your-own-network path), and the preserved error contract (HTTP 400 on
+# the wire, the meaningful code in the body)
 smoke:
     #!/usr/bin/env pwsh
     Set-StrictMode -Version Latest
@@ -98,6 +99,11 @@ smoke:
         $page = Invoke-WebRequest -Uri "https://$fqdn$path" -TimeoutSec 30
         Write-Host "GET $path -> $($page.StatusCode)"
     }
+    $ok = (Invoke-WebRequest -Uri "https://$fqdn/api/CheckCidr?cidr=10.0.0.0/29" -TimeoutSec 30).Content | ConvertFrom-Json
+    if (-not $ok.validAzureSubnet -or $ok.usableAddresses -ne 3) { throw 'a /29 must be valid in Azure with 3 usable addresses' }
+    $no = (Invoke-WebRequest -Uri "https://$fqdn/api/CheckCidr?cidr=10.0.0.0/30" -TimeoutSec 30).Content | ConvertFrom-Json
+    if ($no.validAzureSubnet) { throw 'a /30 must not be a valid Azure subnet' }
+    Write-Host 'GET /api/CheckCidr (/29 yes, /30 no) -> azure subnet rules answering'
     $url = terraform -chdir=terraform output -raw example_query
     if ($url -ne 'test vnet disabled') {
         $answer = (Invoke-WebRequest -Uri $url -TimeoutSec 30).Content | ConvertFrom-Json

@@ -112,13 +112,16 @@ namespace FindNextCIDR
                 <h1>FindNextCIDRRange</h1>
                 <p class="tagline">
                   An HTTP API that answers one question well: what is the next free CIDR of a
-                  given size in an Azure virtual network?
+                  given size in an Azure virtual network? Plus a checker for any CIDR against
+                  Azure's subnet rules, no Azure access required.
                 </p>
                 <pre><code>GET /api/GetCidr?subscriptionId=<span class="param">&lt;sub&gt;</span>
                &amp;resourceGroupName=<span class="param">&lt;rg&gt;</span>
                &amp;virtualNetworkName=<span class="param">&lt;vnet&gt;</span>
                &amp;cidr=<span class="param">&lt;2..29&gt;</span>
-               [&amp;addressSpace=<span class="param">&lt;cidr&gt;</span>]</code></pre>
+               [&amp;addressSpace=<span class="param">&lt;cidr&gt;</span>]
+
+            GET /api/CheckCidr?cidr=<span class="param">&lt;cidr&gt;</span>          e.g. 10.0.0.0/29</code></pre>
                 <div class="links">
                   <a class="primary" href="/api/swagger">Try it in Swagger UI</a>
                   <a href="/api/openapi.yaml">OpenAPI spec</a>
