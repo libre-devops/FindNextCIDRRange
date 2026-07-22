@@ -17,6 +17,7 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="../../openapi.yaml" LogicalName="openapi.yaml" />
+    <InternalsVisibleTo Include="FindNextCIDRRange.Tests" />
   </ItemGroup>
   <ItemGroup>
     <None Update="host.json">

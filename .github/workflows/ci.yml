@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   validate:
-    name: Validate (dotnet build, fmt, validate, tflint)
+    name: Validate (dotnet build + test, fmt, validate, tflint)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,8 +19,11 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Build the function
-        run: dotnet build src/Find-NextCidrRange -c Release
+      - name: Build the function and the tests
+        run: dotnet build FindNextCIDRRange.sln -c Release
+
+      - name: Unit tests (the contract guard)
+        run: dotnet test FindNextCIDRRange.sln -c Release --no-build
 
       - uses: hashicorp/setup-terraform@v3
         with:

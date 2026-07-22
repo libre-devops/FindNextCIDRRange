@@ -213,7 +213,9 @@ namespace FindNextCIDR
             return response;
         }
 
-        private static string ValidateInput(string subscriptionId, string virtualNetworkName, string resourceGroupName, string cidrString, string desiredAddressSpace)
+        // The validators and the pure half of the subnet search are internal rather than private
+        // so the unit tests can pin the contract directly (see FindNextCIDRRange.Tests).
+        internal static string ValidateInput(string subscriptionId, string virtualNetworkName, string resourceGroupName, string cidrString, string desiredAddressSpace)
         {
             string errorMessage = null;
 
@@ -241,7 +243,7 @@ namespace FindNextCIDR
             return errorMessage;
         }
 
-        private static bool ValidateCIDRBlock(string inCIDRBlock)
+        internal static bool ValidateCIDRBlock(string inCIDRBlock)
         {
             bool isGood = false;
 
@@ -265,7 +267,7 @@ namespace FindNextCIDR
             return isGood;
         }
 
-        private static bool ValidateCIDR(string inCIDR)
+        internal static bool ValidateCIDR(string inCIDR)
         {
             bool isGood = false;
 
@@ -281,15 +283,11 @@ namespace FindNextCIDR
 
         private static string GetValidSubnetIfExists(VirtualNetworkResource vNet, IPNetwork2 vNetCIDR, Byte cidr)
         {
-            var usedSubnets = new List<IPNetwork2>();
+            var usedPrefixes = new List<string>();
 
             // Get every Azure subnet in the VNet
             SubnetCollection usedSubnetsAzure = vNet.GetSubnets();
 
-            // Get a list of all CIDRs that could possibly fit into the given address space with the CIDR range requested
-            IPNetworkCollection candidateSubnets = vNetCIDR.Subnet(cidr);
-
-            // Convert into IPNetwork object list
             foreach (SubnetResource usedSubnet in usedSubnetsAzure)
             {
                 var prefixes = new List<string>();
@@ -299,9 +297,21 @@ namespace FindNextCIDR
                 if (null != usedSubnet.Data.AddressPrefix && !prefixes.Contains(usedSubnet.Data.AddressPrefix))
                     prefixes.Add(usedSubnet.Data.AddressPrefix);
 
-                foreach (var prefix in prefixes)
-                    usedSubnets.Add(IPNetwork2.Parse(prefix));
+                usedPrefixes.AddRange(prefixes);
             }
+
+            return GetValidSubnetIfExists(usedPrefixes, vNetCIDR, cidr);
+        }
+
+        internal static string GetValidSubnetIfExists(IEnumerable<string> usedSubnetPrefixes, IPNetwork2 vNetCIDR, byte cidr)
+        {
+            var usedSubnets = new List<IPNetwork2>();
+
+            foreach (string prefix in usedSubnetPrefixes)
+                usedSubnets.Add(IPNetwork2.Parse(prefix));
+
+            // Get a list of all CIDRs that could possibly fit into the given address space with the CIDR range requested
+            IPNetworkCollection candidateSubnets = vNetCIDR.Subnet(cidr);
 
             foreach (IPNetwork2 candidateSubnet in candidateSubnets)
             {
