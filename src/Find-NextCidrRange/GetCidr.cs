@@ -219,15 +219,20 @@ namespace FindNextCIDR
         {
             string errorMessage = null;
 
-            if (null == subscriptionId)
+            // Empty or whitespace name parameters count as missing: they used to fall through to
+            // the SDK and surface as an unstable exception message in a 500-coded body, and no
+            // consumer can have depended on that. The historical message text is kept. The cidr
+            // check stays null-only so an empty cidr keeps producing the historical
+            // "Invalid CIDR size requested: " body from ValidateCIDR instead.
+            if (string.IsNullOrWhiteSpace(subscriptionId))
             {
                 errorMessage = "subscriptionId is null";
             }
-            else if (null == virtualNetworkName)
+            else if (string.IsNullOrWhiteSpace(virtualNetworkName))
             {
                 errorMessage = "virtualNetworkName is null";
             }
-            else if (null == resourceGroupName)
+            else if (string.IsNullOrWhiteSpace(resourceGroupName))
             {
                 errorMessage = "resourceGroupName is null";
             }

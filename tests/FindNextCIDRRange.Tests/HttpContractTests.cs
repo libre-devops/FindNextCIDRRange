@@ -47,6 +47,9 @@ public class HttpContractTests
     [InlineData("?subscriptionId=x", "virtualNetworkName is null")]
     [InlineData("?subscriptionId=x&virtualNetworkName=x", "resourceGroupName is null")]
     [InlineData("?subscriptionId=x&virtualNetworkName=x&resourceGroupName=x", "cidr is null")]
+    [InlineData("?subscriptionId=&virtualNetworkName=x&resourceGroupName=x&cidr=26", "subscriptionId is null")]
+    [InlineData("?subscriptionId=x&virtualNetworkName=&resourceGroupName=x&cidr=26", "virtualNetworkName is null")]
+    [InlineData("?subscriptionId=x&virtualNetworkName=x&resourceGroupName=&cidr=26", "resourceGroupName is null")]
     public async Task Missing_parameters_report_which_one_in_the_body(string queryString, string detail)
     {
         var response = await Invoke(queryString);
@@ -55,6 +58,17 @@ public class HttpContractTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("400", error.code);
         Assert.Equal("BadRequest, Invalid input: " + detail, error.message);
+    }
+
+    [Fact]
+    public async Task An_empty_cidr_keeps_its_own_historical_body()
+    {
+        var response = await Invoke("?subscriptionId=x&resourceGroupName=x&virtualNetworkName=x&cidr=");
+        var error = JsonSerializer.Deserialize<GetCidr.CustomError>(response.ReadBody());
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("400", error.code);
+        Assert.Equal("BadRequest, Invalid CIDR size requested: ", error.message);
     }
 
     [Fact]

@@ -44,6 +44,23 @@ public class ValidatorTests
     }
 
     [Fact]
+    public void Empty_or_whitespace_name_parameters_count_as_missing()
+    {
+        Assert.Equal("subscriptionId is null", GetCidr.ValidateInput("", "vnet", "rg", "26", null));
+        Assert.Equal("subscriptionId is null", GetCidr.ValidateInput("   ", "vnet", "rg", "26", null));
+        Assert.Equal("virtualNetworkName is null", GetCidr.ValidateInput("sub", "", "rg", "26", null));
+        Assert.Equal("resourceGroupName is null", GetCidr.ValidateInput("sub", "vnet", " ", "26", null));
+    }
+
+    [Fact]
+    public void An_empty_cidr_is_not_treated_as_missing()
+    {
+        // An empty cidr must keep flowing through to ValidateCIDR, which rejects it with the
+        // historical "Invalid CIDR size requested: " body; see the HTTP contract tests.
+        Assert.Null(GetCidr.ValidateInput("sub", "vnet", "rg", "", null));
+    }
+
+    [Fact]
     public void A_bad_address_space_fails_input_validation()
     {
         Assert.Equal("desiredAddressSpace is invalid", GetCidr.ValidateInput("sub", "vnet", "rg", "26", "not-a-cidr"));
