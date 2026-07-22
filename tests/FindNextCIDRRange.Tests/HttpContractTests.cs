@@ -13,7 +13,9 @@ public class HttpContractTests
 {
     private static async Task<FakeHttpResponseData> Invoke(string queryString, string method = "GET", string body = null)
     {
-        var function = new GetCidr(NullLogger<GetCidr>.Instance);
+        // The default mode is pinned explicitly so the ambient HONOR_HTTP_STATUS environment
+        // variable can never leak into these assertions.
+        var function = new GetCidr(NullLogger<GetCidr>.Instance, honorHttpStatus: false);
         var request = new FakeHttpRequestData(
             new FakeFunctionContext(),
             new Uri("https://localhost/api/GetCidr" + queryString),

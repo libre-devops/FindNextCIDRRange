@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: FindNextCIDRRange
-  version: 2.1.0
+  version: 2.2.0
   description: |
     An HTTP API that answers one question well: what is the next free CIDR of a given size in an
     Azure virtual network?
@@ -12,6 +12,11 @@ info:
     * Every error travels with HTTP 400 on the wire; the meaningful status lives in the error
       body's `code` field (`400` invalid input, `404` vnet or address space not found, `500`
       unexpected failure).
+
+    A deployment can opt out of the second behaviour: with the `HONOR_HTTP_STATUS` app setting
+    set to `true`, errors travel with the status from the body's `code` field instead (so 404 and
+    500 appear on the wire). The bodies are identical in both modes; only the status line moves.
+    Ask the operator of the deployment you are calling which mode it runs.
 
     The caller's identity is the function app's managed identity, which needs Reader on the scope
     holding the virtual network being queried.
@@ -136,7 +141,9 @@ components:
       properties:
         code:
           type: string
-          description: The meaningful HTTP status as a string; the wire status is always 400.
+          description: >-
+            The meaningful HTTP status as a string. The wire status is 400 regardless by default;
+            deployments with HONOR_HTTP_STATUS enabled send this value on the wire too.
           enum: ['400', '404', '500']
         message:
           type: string
@@ -159,9 +166,10 @@ components:
             proposedCIDR: 10.30.0.128/26
     Error:
       description: >-
-        Any failure. The wire status is always 400 (a preserved 1.x behaviour); read the body's
-        code field for the meaningful status: 400 invalid input, 404 vnet or address space not
-        found (or nothing of the requested size fits), 500 unexpected failure.
+        Any failure. The wire status is always 400 by default (a preserved 1.x behaviour); read
+        the body's code field for the meaningful status: 400 invalid input, 404 vnet or address
+        space not found (or nothing of the requested size fits), 500 unexpected failure. On a
+        deployment with HONOR_HTTP_STATUS enabled the same code also becomes the wire status.
       content:
         text/plain:
           schema:

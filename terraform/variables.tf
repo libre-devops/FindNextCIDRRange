@@ -10,6 +10,12 @@ variable "deploy_test_vnet" {
   default     = true
 }
 
+variable "honor_http_status" {
+  description = "Opt this deployment into truthful HTTP wire statuses: errors travel with the status from the body's code field instead of the historical constant 400. Off by default so existing consumers see no change; the bodies are identical either way."
+  type        = bool
+  default     = false
+}
+
 variable "env" {
   description = "Environment code used in resource names."
   type        = string

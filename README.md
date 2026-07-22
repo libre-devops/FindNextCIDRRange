@@ -52,7 +52,11 @@ A successful answer:
 omitted, the first space that fits wins. `cidr` accepts 2 through 29. Errors return a JSON body of
 `{ "code": "...", "message": "..." }`; note the long-standing contract that every error travels
 with HTTP 400 on the wire while the meaningful status lives in the body's `code` field, which this
-rewrite preserves deliberately (existing consumers parse the body).
+rewrite preserves deliberately (existing consumers parse the body). A deployment can opt out: set
+the `HONOR_HTTP_STATUS` app setting to `true` (`honor_http_status = true` in tfvars) and errors
+travel with the body's `code` as the wire status instead. The bodies are identical in both modes,
+so opt in freely on a fresh deployment; leave it off where existing consumers might branch on the
+constant 400.
 
 The API documents itself: a deployed app serves a landing page at `/` (a single self-contained
 HTML document, no external assets), its OpenAPI description at `/api/openapi.yaml`, and an

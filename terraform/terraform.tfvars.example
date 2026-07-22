@@ -12,3 +12,7 @@ loc   = "uks"
 env   = "dev"
 
 deploy_test_vnet = true
+
+# Set true for truthful HTTP wire statuses on errors instead of the historical constant 400 (the
+# body is identical either way). Leave false if anything consuming this deployment predates 2.2.0.
+honor_http_status = false

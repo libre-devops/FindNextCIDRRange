@@ -46,10 +46,30 @@ namespace FindNextCIDR
     public class GetCidr
     {
         private readonly ILogger<GetCidr> _logger;
+        private readonly bool _honorHttpStatus;
 
         public GetCidr(ILogger<GetCidr> logger)
+            : this(logger, ReadHonorHttpStatus())
+        {
+        }
+
+        internal GetCidr(ILogger<GetCidr> logger, bool honorHttpStatus)
         {
             _logger = logger;
+            _honorHttpStatus = honorHttpStatus;
+        }
+
+        // The HONOR_HTTP_STATUS app setting opts a deployment into truthful wire statuses: errors
+        // travel with the status from the body's code field instead of the historical constant
+        // 400. Default off, so existing consumers see no change; bodies are identical either way.
+        internal static bool ReadHonorHttpStatus()
+        {
+            return bool.TryParse(Environment.GetEnvironmentVariable("HONOR_HTTP_STATUS"), out bool honor) && honor;
+        }
+
+        internal static HttpStatusCode WireStatus(bool honorHttpStatus, HttpStatusCode intended)
+        {
+            return honorHttpStatus ? intended : HttpStatusCode.BadRequest;
         }
 
         public class ProposedSubnetResponse
@@ -198,8 +218,9 @@ namespace FindNextCIDR
                 string jsonString = JsonSerializer.Serialize(customError, options);
 
                 // The original returned BadRequestObjectResult for every error, so the wire status
-                // is always 400 and the intended status lives in the body. Preserved on purpose.
-                return await PlainTextResponse(req, HttpStatusCode.BadRequest, jsonString);
+                // is always 400 and the intended status lives in the body. Preserved by default;
+                // HONOR_HTTP_STATUS=true sends the body's code on the wire instead.
+                return await PlainTextResponse(req, WireStatus(_honorHttpStatus, httpStatusCode), jsonString);
             }
         }
 

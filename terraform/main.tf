@@ -56,6 +56,13 @@ module "flex_function_app" {
     (local.func_name) = {
       runtime_name    = "dotnet-isolated"
       runtime_version = "10.0"
+
+      # Off by default: errors keep the historical wire status of 400 with the meaningful status
+      # in the body's code field. Setting honor_http_status = true opts this deployment into
+      # truthful wire statuses; the bodies are identical either way.
+      app_settings = {
+        HONOR_HTTP_STATUS = tostring(var.honor_http_status)
+      }
     }
   }
 }
