@@ -11,7 +11,7 @@
     <PackageReference Include="Azure.ResourceManager.Network" Version="1.16.1" />
     <PackageReference Include="IPNetwork2" Version="4.3.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.52.0" />
-    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.7" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.1.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http" Version="3.3.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="2.51.0" />
   </ItemGroup>
